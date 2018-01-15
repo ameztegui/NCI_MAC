@@ -10,8 +10,8 @@ library(readr)
 # Load and wrangle the datasets -------------------------------------------
 
 ## Load the database with all the trees and the neighbours
-all_trees <- read_tsv('./Data/old_all_trees2009_2014.txt') 
-raw_neighbours <- read_tsv('./Data/old_raw_neighbours.txt')
+all_trees <- read_tsv('./Data/tidydata_2009_2014.txt') 
+raw_neighbours <- read_tsv('./Data/raw_neighbours.txt')
 
 ## Load the dataset of functional traits,  and neighbour datasets
 traits <- read.table('./Data/functional_traits.dta')

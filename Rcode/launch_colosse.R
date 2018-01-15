@@ -1,10 +1,13 @@
 ###################################################
 #### Models: supercomputer file 1
 ###################################################
-# cluster creation
-# Export variables and libraries
-source('./Rcode/NCI_Models_DIA.R')
 
+# Import required functions
+source('./Rcode/NCI_Models_DIA.R')
+# source('./Rcode/NCI_Models_HEI.R')
+# source('./Rcode/NCI_Models_VOL.R')
+
+# Load libraries
 library(Rmpi)
 library(snow)
 library(doSNOW)
@@ -12,7 +15,7 @@ library(foreach)
 
 nCore = as.integer(Sys.getenv("MOAB_PROCCOUNT"))
 if (is.na(nCore)){ nCore = 8 }
-# 
+
 # # Multiple nodes
 cl <- makeMPIcluster(nCore)
 registerDoSNOW(cl)
@@ -21,7 +24,6 @@ registerDoSNOW(cl)
 #library(doParallel)
 #cl<-makeCluster(8)
 #registerDoParallel(cl)
-
 
 out <- clusterEvalQ(cl, library(likelihood))
 out <- clusterEvalQ(cl, library(magrittr))

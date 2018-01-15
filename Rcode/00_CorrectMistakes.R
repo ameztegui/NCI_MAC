@@ -6,7 +6,7 @@ library(reshape2)
 library(ggvis)
 
 # Load the file with all trees in MAC
-all_trees <- read.table('./Data/old_data2009_2014.txt', header = TRUE, sep="\t", dec=".")
+all_trees <- read.table('./Data/data2009_2014.txt', header = TRUE, sep="\t", dec=".")
 # 
 # # Create a dataframe with name, leaf habit, origin and join it to the dataset
 namesSp <- data.frame(CodeSp=levels(all_trees$CodeSp),
@@ -117,4 +117,4 @@ all_trees <- mutate(all_trees,
                     Vmean=(V2009+V2014)/2)
 
 
-write.table(all_trees, "./Data/old_all_trees2009_2014.txt", row.names = F, sep="\t")
+write.table(all_trees, "./Data/tidydata_2009_2014.txt", row.names = F, sep="\t")
