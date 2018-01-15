@@ -7,7 +7,7 @@ library(ggvis)
 
 # Load the file with all trees in MAC
 all_trees <- read.table('./Data/data2009_2014.txt', header = TRUE, sep="\t", dec=".")
-# 
+ 
 # # Create a dataframe with name, leaf habit, origin and join it to the dataset
 namesSp <- data.frame(CodeSp=levels(all_trees$CodeSp),
                       NameSp= c("Abies balsamea","Acer platanoides","Acer rubrum","Acer saccharum",
