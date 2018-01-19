@@ -1,0 +1,333 @@
+---
+title: "NCI Analysis for MAC (IDENT)"
+author: "Aitor Ameztegui (CREAF - CTFC)"
+date: "November 2016"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+  word_document: default
+always_allow_html: yes
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook showing the descriptive analyses and first results of the NCI analyses carried out in MAC. The final aim is to determine the role of functional diversity on growth, through the classic NCI growth equations. For this, we first need to determine the target trees, identify which are the neighbours for each target, and define several indicators of functional diversity in the neighborhood of each tree.
+```{r, echo=F, message=F, warning=F}
+rm(list=ls())
+
+library(dplyr)
+library(reshape2)
+library(knitr)
+library(ggvis)
+library (vegan)
+
+traits <- read.table('../Data/functional_traits.dta')
+targets <- read.table('../Data/targets.txt', header = TRUE, sep="\t", dec=".")
+neighbours <- read.table('../Data/neighbours.txt', header = TRUE, sep="\t", dec=".")
+neighbours <- neighbours[neighbours$Tree_ID_IN %in% targets$Tree_ID,] # only neighbours of targets
+
+```
+
+# Target Trees #
+
+First thing we need is to describe our dataset, which contains 19 species (12 native, 7 exotic), that have been measured between 2009 and 2014. The total number of trees planted was 13,824, but after deleting the missing and dead trees, we kept a total of `r nrow(targets)` as target trees. These are the main descriptive statistics of the target trees per species
+
+```{r echo =F,message=F, warning=F}
+
+library(tables)
+Mean <- function(x) base::mean(x, na.rm=TRUE)
+Sd <- function(x) sd(x, na.rm=TRUE)
+tabular( (CodeSp +1 ) ~ (n=1) + Format(digits=2) *
+                (Heading("Diam14")*DB2014 + 
+                Heading("Height14") *H2014 +
+                Heading("D Growth")*(DB2014-DB2009)+
+                Heading("H Growth")*(H2014-H2009)      )*((Mean+Sd) ), data=targets )
+
+```
+
+We can see that the exotic species are less abundant (LADE: 258; PIOM: 235) than the native ones, for which there are always > 700 individuals in the dataset (this contrasts with previous database, where some species were much rarer). The mean diameter growth for all the dataset is `r round(Mean(targets$DB2014 - targets$DB2009)/5,2)` mm per year in diameter, and `r round(Mean(targets$H2014 - targets$H2009)/5,2)` cm per year in height. We can also see that diameter growth is more consistent across species than height growth, for which the fastest growing species (BEPA: 5.82 m) growed almost 10 times faster than the slowest growing one (PIOM = 0.6m)
+
+\newpage
+
+
+# Determination of neighbours #
+
+As we will work at an individual level, not at the plot level, we must identify the neighbours of each target tree. We do this externally, using ArcGIS and the Generate Near Table utility. We must note that every target tree has a different and unique neighborhood, and as a consequence, a given species may not exist in the neighborhood of another given species. This can have computational consequences, so first we need to know which species are neighbours of which ones.
+
+```{r warning=F}
+mytable <- table(neighbours$CodeSp_IN, neighbours$CodeSp_NEAR)
+kable(addmargins(mytable,2), format = 'markdown' )
+```
+
+Although some combinations are rarer than others, with the new dataset there are many more neighbours for all combinations of species. The minimum is the 25 BEAL (Betula alleghaniensis) in the neighbourhood of LADE (Larix decidua).
+
+Let's see how many neighbours has a target tree in average
+
+```{r warning=F, echo =F}
+n_neighbours <- neighbours %>% group_by(Tree_ID_IN) %>%
+        summarise(count=n())
+hist(n_neighbours$count, main=("Mean # neighbours per tree"), xlab=("# neighbours"))
+```
+
+It is also important to know if this value (mean #neighbours) is consistent across species.
+
+```{r}
+
+plot(n_neighbours~ CodeSp, data=targets,las =2, main = "# Neighbours per species")
+abline(mean(targets$n_neighbours, na.rm=T),0 , col="red", lwd=2, cex=0.8)
+
+```
+
+Another thing to consider is if the mean distances to neighbours of different species are similar for all target species, since competition coefficients might be influenced by spatial seggregation of species. Thus, we determine the mean distances to neighbours of different species.
+
+
+```{r, warning=F}
+melt_distance <- neighbours %>% 
+                group_by(CodeSp_IN, CodeSp_NEAR) %>% 
+                                summarise(mean_dist=mean(NEAR_DIST),
+                                          sd_dist=sd(NEAR_DIST))
+
+neig_sps_dist <- dcast(data=melt_distance, CodeSp_IN~CodeSp_NEAR, 
+                       value.var= "mean_dist")
+row.names(neig_sps_dist)= neig_sps_dist$CodeSp_IN
+kable(round(neig_sps_dist[,-1],2),format = "markdown")
+
+```
+
+We see that both the mean number of neighbours and the mean distance are very similar across species, so we don't need to worry about spatial seggregation of species.
+
+\newpage
+
+
+# Functional Diversity #
+
+## Functional Traits Database ##
+
+For this study, we characterized three components of functional diversity: functional difference, functional dispersion and effective species richness. In all cases, the dataset of traits used is the same:
+
+```{r echo =F,warning=F}
+traits <- read.table('../Data/functional_traits.dta')
+std_traits<- data.frame(scale(traits))
+kable(round(traits,2),format = "markdown")
+```
+
+To calculate the several diversity indices we need to take into account the relative abundances of each species on each neighborhood, based on the sum of diameters per species. We will compute this separately for the target tree and the neighbours
+
+```{r message=F, warning=F}
+
+
+# Organize the files to get accumulated diameter per each neighbour species 
+melt_sum <- neighbours %>% 
+                group_by(Tree_ID_IN, CodeSp_NEAR) %>% 
+                                summarise_each (funs(sum(DB2009)))
+neig_sps_diam <- dcast(data=melt_sum, Tree_ID_IN~CodeSp_NEAR, value.var= "DB2009")
+neig_sps_diam  <- as.matrix(neig_sps_diam [,-1])
+
+
+# Organize target files to get the diam value for each target, and in the same format as neighbours
+targ_sps_diam <- dcast(targets, Tree_ID~CodeSp, value.var="DB2009") 
+targ_sps_diam <- as.matrix(targ_sps_diam[,-1])
+```
+
+...and now we can compute the several FD indices using the FD package
+
+```{r message=F, warning=F}
+
+library(FD)
+        
+# Neighbour Traits (CWM of neighbours)
+#FD_Voisins <- functcomp(std_traits, neig_sps_diam)
+
+FD_neighbours <- dbFD(std_traits,neig_sps_diam,
+                    calc.FRic = F,calc.FGR = F,calc.FDiv = F,
+                    clust.type = "ward")
+        
+# Target Traits (CWM of target)
+#FD_Cible <- functcomp(std_traits, targ_sps_diam)
+FD_targets <- dbFD(std_traits,targ_sps_diam,
+                    calc.FRic = F,calc.FGR = F,calc.FDiv = F,
+                    clust.type = "ward")
+
+```
+
+## Functional Difference (FDif) ##
+
+The first variable of interest is functional difference (FDif), calculated as the difference in trait values between the target and its neighbours. Actually, there are two possible ways to calculate this:
+
+
+### (1) Based on mean of the differences between traits ###
+
+We  know CWM for each trait for target and neighbours, and FDif is the difference between these two values. Since CWM is trait-specific, we have to calculate a unidimensional variable, so we compute the quadratic mean of the differences.By definition, FDif can get values of 0 when all the neighbours of a target tree are conspecific, so we  modify this by adding 1 to all FDif values.
+
+
+```{r}
+# Difference between target and neighbour CWM values
+traits_dif <- (FD_targets$CWM - FD_neighbours$CWM)
+
+# Quadratic mean
+FDif <- data.frame("FDif"= sqrt(rowSums(traits_dif^2)/
+                                        ncol(traits_dif))+1)
+targets <- cbind (targets, FDif)
+
+```
+
+
+### (2) Based on the difference in functional identity ###
+
+Calculating CWM would provide one value per neighborhood and per trait, so in order to obtain a single value we first perform a PCA with trait values, and then calculate a CWM of the first component of the PCA.
+
+
+```{r warning=F}
+# Perform PCA to determine Functional Identity
+
+        # Perform the PCA
+        pca_traits <- princomp(traits, cor=T)
+        #summary(pca_traits)
+        #loadings(pca_traits)
+        #scores(pca_traits)
+        PC1=data.frame(Axis1=pca_traits$scores[,1])
+        kable(round(PC1,3),format = "markdown")
+        
+        # CWM of Axis1 for Neighbours 
+        FId_Voisins=functcomp(PC1, neig_sps_diam)
+        
+        # CWM of Axis1 for Target 
+        FId_Cible=functcomp(PC1, targ_sps_diam)
+        
+        # Determine the difference (in absolute value)
+        FDif2<- abs(FId_Voisins - FId_Cible) +1
+        colnames(FDif2) <- "FDif2"
+        targets <- cbind (targets, FDif2)
+
+```
+
+Let's see how this new variable looks like depending on how we calculate it
+
+```{r warning=F}
+par (mfrow = c(2,2))
+hist(FDif$FDif, main="FDif using quadratic mean")
+hist(FDif2$FDif2, main="FDif using functional Id (PCA)")
+
+plot(FDif~ CodeSp, data=targets,las =2, main = "FDif per species (quadratic.mean)")
+abline(mean(targets$FDif, na.rm=T),0 , col="red", lwd=2, cex=0.8)
+
+plot(FDif2~ CodeSp, data=targets,las =2,main = "FDif per species (PCA)")
+abline(mean(targets$FDif2, na.rm=T),0 , col="red", lwd=2, cex=0.8)
+```
+
+
+
+## Functional Dispersion ##
+
+Functional dispersion was calculated previously. We also add 1 to all values to avoid 0's.
+
+```{r}
+FDis <- FD_neighbours$FDis +1
+targets <- cbind (targets, FDis)
+
+
+hist(FDis, main="FDis ")
+plot(FDis~ CodeSp, data=targets,las =2,main = "FDis per species")
+abline(mean(targets$FDif2, na.rm=T),0 , col="red", lwd=2, cex=0.8)
+```
+
+## Species richness##
+
+First, we determine the species richness in the neighborhood of each target tree. Then, we calculate the  "effective number of species" as the exponential of the Shannon entropy
+
+```{r}
+library(vegan)
+
+sp_neighbours <- neighbours %>% group_by(Tree_ID_IN)%>%
+        summarise(n_sp=length(unique(CodeSp_NEAR)))
+
+# Use the matrix of abundances based on dbh, but substitute NA for 0
+neig_sps_diam_NoNA <- neig_sps_diam
+neig_sps_diam_NoNA[is.na(neig_sps_diam_NoNA)] <- 0
+shannon<- exp(diversity(neig_sps_diam_NoNA, index = "shannon"))
+targets <- cbind (targets, shannon)
+
+hist(shannon, main="Shannon Exponent ")
+plot(shannon~ CodeSp, data=targets,las =2,main = "Shannon exponent per species")
+abline(mean(targets$shannon, na.rm=T),0 , col="red", lwd=2, cex=0.8)
+
+```
+
+
+\newpage
+# Regroupement of species #
+
+Since some combinations of target-neighbour are rare, we may be forced to group the neighbour species into a limited number of classes. We use here two approaches: in the first, called "Functional Groups", we performed a cluster analysis based on the values of functional traits provided above. In the second, species were classified into three groups as a function of their shade tolerance: tolerants, intermediate and intolerants.
+
+
+## Based on Functional Groups ##
+
+```{r warning=F}
+
+d<-vegdist(std_traits,method="euclidean",na.r=T)
+fit <- hclust(d, method = "ward.D2")
+
+# Plot dendrogram
+plot(fit, cex=0.6, 
+     main = " Functional Groups ", 
+     hang = -1)
+        # Add red boxes to separate groups
+        rect.hclust(fit, 4)
+        
+```
+
+We can now compute how many neighbours of each functional group there are at the neighborhood of each target species 
+
+
+```{r}
+
+# Get the cluster for each species
+cluster_groups <- data.frame(CodeSp= levels(targets$CodeSp),cluster=cutree(fit, 4))
+cluster_groups$cluster <- as.character(cluster_groups$cluster)
+targets <- left_join(targets, cluster_groups, by=c("CodeSp"))
+neighbours <- left_join(neighbours, cluster_groups, by=c("CodeSp_NEAR"="CodeSp"))
+
+targets$cluster <- as.factor(targets$cluster)
+neighbours$cluster <- as.factor(neighbours$cluster)
+
+cluster_neighbours <- table(neighbours$CodeSp_IN, neighbours$cluster)
+kable(addmargins(cluster_neighbours,2), format="markdown")
+```
+
+So we see it actually solves the problem of the lack of species
+
+## Based on Shade tolerance Groups ##
+
+In this case, standardizing or not has no effect on the results, since we only work with one variable (shade tolerance). We performed a cluster analysis and grouped species in three categories (intolerant, tolerant and intermediate)
+```{r warning=F}
+TolS <- as.matrix(traits$ShadeT) #cluster pour la tol?rance ? l'ombrage 
+rownames(TolS)=row.names(traits)
+
+# Ward Hierarchical Clustering
+d_TolS <- dist(TolS, method = "euclidean") # distance matrix
+fit_TolS <- hclust(d_TolS, method="ward.D2") 
+
+# Plot dendrogram
+plot(fit_TolS, cex=0.7, 
+     main = " Shade Tolerance Groups ")
+        # Add red boxes to separate groups
+        rect.hclust(fit_TolS, 3)
+
+```
+
+Let's see how many neighbours of each shade tolerance group there are at the neighborhood of each target species 
+
+
+```{r}
+
+# Get the shade clusters for each species
+shade_groups <- data.frame(CodeSp= levels(targets$CodeSp),shade=cutree(fit_TolS, k=3))
+shade_groups$shade <- as.character(shade_groups$shade)
+targets<- left_join(targets, shade_groups, by=c("CodeSp")) 
+neighbours <- left_join(neighbours, shade_groups, by=c("CodeSp_NEAR"="CodeSp")) 
+
+targets$shade <- as.factor(targets$shade)
+neighbours$shade <- as.factor(neighbours$shade)
+
+shade_neighbours <- table(neighbours$CodeSp_IN, neighbours$shade)
+kable(addmargins(shade_neighbours,2), format="markdown")
+```

@@ -1,0 +1,78 @@
+---
+title: "Interpretation of the first results for the MAC - NCI project"
+author: "Aitor Ameztegui - Universitat de Lleida"
+date: "January 2018"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+```{r "setup", echo =F}
+rm(list=ls())
+
+knitr::opts_chunk$set(echo =F)
+```
+
+
+# Introduction
+
+This document summarises the results of the models ran to test the effect of neighborhood, and functional diversity on the growth of 19 tree species in the MAC experiment. We will specify the hypotheses tested, the models developed to test those hypotheses, and the results of those models. 
+
+```{r}
+load ("../Data/NCI_MAC.Rdata")
+
+```
+
+First thing we need is to describe our dataset, which contains 19 species (12 native, 7 exotic), that have been measured between 2009 and 2014. The total number of trees planted was 13,824, but after deleting the missing and dead trees, we kept a total of `r nrow(targets)` as target trees. These are the main descriptive statistics of the target trees per species
+
+```{r}
+
+# library(tables)
+# Mean <- function(x) base::mean(x, na.rm=TRUE)
+# Sd <- function(x) sd(x, na.rm=TRUE)
+# tabular( (CodeSp +1 ) ~ (n=1) + Format(digits=2) *
+#                 (Heading("Diam14")*DB2014 + 
+#                 Heading("Height14") *H2014 +
+#                 Heading("D Growth")*(DB2014-DB2009)+
+#                 Heading("H Growth")*(H2014-H2009)      )*((Mean+Sd) ), data=targets )
+
+```
+
+The mean diameter growth for all the dataset is `r round(mean(targets$DB2014 - targets$DB2009)/5,2)` mm per year in diameter, and `r round(mean(targets$H2014 - targets$H2009)/5,2)` cm per year in height. We can also see that diameter growth is more consistent across species than height growth, for which the fastest growing species (BEPA: 5.82 m) growed almost 10 times faster than the slowest growing one (PIOM = 0.6m)
+
+
+# First hypothesis: Growth is mediated by the identity of neighbours
+
+Beyond the presence of neighbours, which is known to affect the growth of a target tree (they can compete, facilitate or be neutral), we hypothesize that the identity of those neighbours matters. To test so, we compare several models. In all of them, growth was modelled as function of several multiplicative components: (1) potential growth, i.e. estimated growth when all the other factors (i.e. predictors) are at optimal values, (2) size effect, i.e. the effect of the size of the target tree on tree growth, and (3) competition effect, which accounts for the number and size of neighbours, and their distance to target tree (see eq.1). Both size effect and competition effect are scalars that range between 0 and 1, and thus act to reduce the estimated potential growth, which indicates the estimated growth when all the other factors are at optimal values. In other words, when size of the target tree and the number, size and distance of neighbours are at the levels that maximize tree growth (i.e. when their effects equal 1), then observed growth equals the estimated potential growth.
+
+
+Following classical studies that followed this approach (Uriarte et al., 2004; Canham et al.,
+2006; Coates et al., 2009; Gómez-Aparicio et al. 2011), the size effect was modeled using a lognormal function:
+
+$$
+Growth {=} PotGrowth * exp[-\frac{1}{2}(\frac{log(size/Xo)}{Xb})^2]
+$$
+
+where Xo represents the target d.b.h. (cm) at which maximum growth occurs and Xb controls the breadth of the function. Depending on the value of Xo, this functional form can be hump-shaped or monotonically increasing/decreasing.
+
+
+The neighborhood effect was modeled as a function of a neighborhood competition index (NCI) using a Weibull function
+
+$$
+Neighborhood effect {=} exp (-(C * size^\gamma * NCI^D)
+$$
+
+The NCI quantifies the net effect of j=1, . . .,n neighboring trees of i=1, . . ., s species on the growth of a target tree z. Following the long tradition of distance-dependence analysis of competition (e.g. Bella, 1971; Daniels, 1976), NCI was assumed to vary as a direct function of the size (d.b.h.) and an inverse function of the distance to neighbors following the form:
+
+$$
+NCI {=} \sum_{i=1}^{n}\sum_{j=1}^{s}\lambda*\frac{size_j^\alpha}{distance_{ij}^\beta}
+$$
+
+where $\alpha$, $\beta$ and $\gamma$ are parameters estimated by the analyses and determine the shape of the effect of the d.b.h. and the distance to the neighbor on NCI.
+
+We were particularly interested in exploring whether neighbor effects on a target species z varied between species or groups of neighbors. In order to do this, we multiplied the net effect of an individual neighbor by a per-capita competition coefficient ($\lambda$) that ranged from 0 to 1 and allowed for differences between species in their competitive effect on a target tree. Competition coefficients were only estimated for those species of competitors for which there were at least 300 neighbors. All remaining species of neighbors for that target species were then grouped into a 'other species' group. We tested four different groupings of neighboring species in Eqn (5): (1) a model in which all species were considered equivalent (i.e. fixing ($\lambda{=}1$); (2) a model that calculated a different ($\lambda$) value for each neighbor species, (3) a model that calculated two separate ($\lambda$), one for conspecifics and another for heterospecifics, (4) a model that calculated four separate ($\lambda$), based on the agrupation of neighbour species into 4 functional groups, and (5), a model that calculated three separate ($\lambda$) based on the shade tolerance of the neighbours.
+
+
+

@@ -1,0 +1,94 @@
+---
+title: "Neighborhood in MAC"
+author: 
+date: "September, 15th 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, load data, warning=F, message=F, echo=F}
+
+
+
+library(likelihood)
+library(forcats)
+library(dplyr)
+library(reshape2)
+library(knitr)
+library(ggplot2)
+library(kableExtra)
+
+
+load ("../Data/NCI_MAC.Rdata")
+```
+
+
+We want to characterize how is the neighborhood of each species. More precisely, we want to define 
+
+1) How many trees of each species are in the neighborhood of a certain target species
+2) How the functional diversity varies among target species
+
+
+### (1) Specific neighborhood
+
+We could first calculate how many neighbours has a tree of a certain species on average, and compare the results across species
+
+```{r average neighbours, fig.width=10}
+
+ggplot(targets) +
+        geom_boxplot( aes (CodeSp, n_neighbours)) 
+        
+```
+
+ We can see there are no big differences, as expected. We can now check how many neighbours of each species has a given target species
+ 
+```{r species neighborhood, size = 'tiny'}
+neighbour_sps <- table (neighbours$CodeSp_IN, neighbours$CodeSp_NEAR)
+kable(addmargins(neighbour_sps,1), format ="html") %>%
+        kable_styling(bootstrap_options =  c("striped","hover", "condensed", "responsive"), full_width = F, font_size = 12,
+                      position = "left") %>%
+        column_spec(1, bold = T, border_right = T)
+```
+
+In this case, we see that some species are indeed very rare. Since our most complex model has 30 parameters, and some studies recommend that the ratio observations/parameters should be > 10, I decided to collapse all neighbouring species with less than 300 observations into a "other" group.
+
+
+### (2) Diversity neighborhood
+
+It is time now to assess if the functional diversity neighborhood is very different across target species. Remember we defined species richness using Shannon and two FD indicators: functional difference and functional dispersion. Let's see each of them
+
+```{r sps richness, fig.width=10, warning=F, message=FALSE}
+
+ggplot(targets) +
+        geom_boxplot( aes (CodeSp, shannon),outlier.color = NA) +
+        ylim(c(0,10)) +
+        ggtitle ("Species richness (Shannon)")
+```
+
+
+```{r func diff, fig.width=10}
+
+ggplot(targets) +
+        geom_boxplot( aes (CodeSp, FDif2), outlier.color = NA) +
+        ggtitle ("Functional difference")
+```
+
+```{r func dispersion, fig.width=10}
+
+ggplot(targets) +
+        geom_boxplot( aes (CodeSp, FDis), outlier.colour = NA) +
+        ggtitle ("Functional dispersion")
+``` 
+
+
+In general, I believe that, despite differences across species, values are similar enough as to don't correct FD values.
+
+
+
+
