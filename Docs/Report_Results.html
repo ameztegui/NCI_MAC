@@ -133,25 +133,44 @@ $(document).ready(function () {
 <p>First thing we need is to describe our dataset, which contains 19 species (12 native, 7 exotic), that have been measured between 2009 and 2014. The total number of trees planted was 13,824, but after deleting the missing and dead trees, we kept a total of 12462 as target trees. These are the main descriptive statistics of the target trees per species</p>
 <p>The mean diameter growth for all the dataset is 7.07 mm per year in diameter, and NA cm per year in height. We can also see that diameter growth is more consistent across species than height growth, for which the fastest growing species (BEPA: 5.82 m) growed almost 10 times faster than the slowest growing one (PIOM = 0.6m)</p>
 </div>
-<div id="first-hypothesis-growth-is-mediated-by-the-identity-of-neighbours" class="section level1">
-<h1>First hypothesis: Growth is mediated by the identity of neighbours</h1>
-<p>Beyond the presence of neighbours, which is known to affect the growth of a target tree (they can compete, facilitate or be neutral), we hypothesize that the identity of those neighbours matters. To test so, we compare several models. In all of them, growth was modelled as function of several multiplicative components: (1) potential growth, i.e. estimated growth when all the other factors (i.e. predictors) are at optimal values, (2) size effect, i.e. the effect of the size of the target tree on tree growth, and (3) competition effect, which accounts for the number and size of neighbours, and their distance to target tree (see eq.1). Both size effect and competition effect are scalars that range between 0 and 1, and thus act to reduce the estimated potential growth, which indicates the estimated growth when all the other factors are at optimal values. In other words, when size of the target tree and the number, size and distance of neighbours are at the levels that maximize tree growth (i.e. when their effects equal 1), then observed growth equals the estimated potential growth.</p>
+<div id="first-hypothesis-the-diversity-of-neighbours-alter-the-role-of-competition-on-tree-growth" class="section level1">
+<h1>First hypothesis: the diversity of neighbours alter the role of competition on tree growth</h1>
+<p>The main factors on which the growth of a tree depends are well established, and among them, two of the most important factors - disregarding climate - are the size of the tree itself, in addition to the neighborhood (number, size and distance from neighbours). Accordingly, growth was modelled as function of several multiplicative components: (1) potential growth, i.e. estimated growth when all the other factors (i.e. predictors) are at optimal values, (2) size effect, i.e. the effect of the size of the target tree on tree growth, and (3) competition effect, which accounts for the number and size of neighbours, and their distance to target tree.</p>
+<p><span class="math display">\[
+Growth {=}  Pot.Growth* size effect * effect
+\]</span> Both size effect and competition effect are scalars that range between 0 and 1, and thus act to reduce the estimated potential growth, which indicates the estimated growth when all the other factors are at optimal values. In other words, when size of the target tree and the number, size and distance of neighbours are at the levels that maximize tree growth (i.e. when their effects equal 1), then observed growth equals the estimated potential growth.</p>
 <p>Following classical studies that followed this approach (Uriarte et al., 2004; Canham et al., 2006; Coates et al., 2009; Gómez-Aparicio et al. 2011), the size effect was modeled using a lognormal function:</p>
 <p><span class="math display">\[
-Growth {=} PotGrowth * exp[-\frac{1}{2}(\frac{log(size/Xo)}{Xb})^2]
+Size effect {=}  exp[-\frac{1}{2}(\frac{log(size/Xo)}{Xb})^2]
 \]</span></p>
 <p>where Xo represents the target d.b.h. (cm) at which maximum growth occurs and Xb controls the breadth of the function. Depending on the value of Xo, this functional form can be hump-shaped or monotonically increasing/decreasing.</p>
 <p>The neighborhood effect was modeled as a function of a neighborhood competition index (NCI) using a Weibull function</p>
 <p><span class="math display">\[
-Neighborhood effect {=} exp (-(C * size^\gamma * NCI^D)
+Neighborhood effect {=} exp (-C * diam^\gamma * NCI^D)
 \]</span></p>
 <p>The NCI quantifies the net effect of j=1, . . .,n neighboring trees of i=1, . . ., s species on the growth of a target tree z. Following the long tradition of distance-dependence analysis of competition (e.g. Bella, 1971; Daniels, 1976), NCI was assumed to vary as a direct function of the size (d.b.h.) and an inverse function of the distance to neighbors following the form:</p>
 <p><span class="math display">\[
 NCI {=} \sum_{i=1}^{n}\sum_{j=1}^{s}\lambda*\frac{size_j^\alpha}{distance_{ij}^\beta}
 \]</span></p>
 <p>where <span class="math inline">\(\alpha\)</span>, <span class="math inline">\(\beta\)</span> and <span class="math inline">\(\gamma\)</span> are parameters estimated by the analyses and determine the shape of the effect of the d.b.h. and the distance to the neighbor on NCI.</p>
+<p>The combination of equations 1,2 and 3 constitutes our basic model, and is the starting point from which we test various hypotheses related to the role of neighbourhood diversity in tree growth. To do this, we compare the base model with various alternatives, using the comparison of models as hypothesis tests.</p>
+</div>
+<div id="first-hypothesis-growth-is-mediated-by-the-diversity-of-the-neighborhood" class="section level1">
+<h1>First hypothesis: Growth is mediated by the diversity of the neighborhood</h1>
+<p>Our baseline model considers the effect on tree growth of tree size and the amount, size and distance of neighbours. Beyond these factors, the relationship between diversity and growth is well established at the stand or community level, so that the most diverse ecosystems are generally more productive. However, that relationship is not so clear at the individual level, and it is far from clear how the diversity of neighbours affects a particular tree. To assess this, we modified the baseline model, so that the effect of neighborhood (i.e. NCI) on tree growth is mediated by the diversity of neighbours. Specifically, we tested three alternative hypotheses:</p>
+<p>H1: The effects of competition on tree growth are less as the specific diversity of your neighborhood increases. To do this, we modified equation 2 so that NCI’s effect on the growth of each target tree was a function of the Shannon index measured in that tree’s neighborhood.</p>
+<p><span class="math display">\[
+Neighborhood effect {=} exp (-C * diam^\gamma * shannon^\theta * NCI^D)
+\]</span></p>
+<p>H2: The effects of competition on tree growth are less as the functional diversity of your neighborhood increases. In this case, NCI’s effect on the growth of each target tree was a function of the functional diversity of the neighborhood, measured through the functional dispersion index.</p>
+<p><span class="math display">\[
+Neighborhood effect {=} exp (-C * diam^\gamma * Fdis^\theta * NCI^D)
+\]</span></p>
+<p>H3: The effects of competition on the growth of a tree are smaller the greater the functional difference between your neighborhood and the target tree. That is, the more functionally different a tree is from its neighborhood. To do this, we calculate the functional difference index as the difference between the functional features of the neighborhood and those of the target tree, as follows.</p>
+<p><span class="math display">\[
+Neighborhood effect {=} exp (-C * diam^\gamma * FDif^\theta * NCI^D)
+\]</span></p>
 <p>We were particularly interested in exploring whether neighbor effects on a target species z varied between species or groups of neighbors. In order to do this, we multiplied the net effect of an individual neighbor by a per-capita competition coefficient (<span class="math inline">\(\lambda\)</span>) that ranged from 0 to 1 and allowed for differences between species in their competitive effect on a target tree. Competition coefficients were only estimated for those species of competitors for which there were at least 300 neighbors. All remaining species of neighbors for that target species were then grouped into a ‘other species’ group. We tested four different groupings of neighboring species in Eqn (5): (1) a model in which all species were considered equivalent (i.e. fixing (<span class="math inline">\(\lambda{=}1\)</span>); (2) a model that calculated a different (<span class="math inline">\(\lambda\)</span>) value for each neighbor species, (3) a model that calculated two separate (<span class="math inline">\(\lambda\)</span>), one for conspecifics and another for heterospecifics, (4) a model that calculated four separate (<span class="math inline">\(\lambda\)</span>), based on the agrupation of neighbour species into 4 functional groups, and (5), a model that calculated three separate (<span class="math inline">\(\lambda\)</span>) based on the shade tolerance of the neighbours.</p>
-<p>with three alternative models, in which the effect of neighbours is mediated by their identity. In the first alternative model, there is a specific effect of neighbours. In the second model, there is an intra- vs- interspecific effect, so we assume a</p>
 </div>
 
 
