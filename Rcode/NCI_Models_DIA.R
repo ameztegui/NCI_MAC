@@ -48,7 +48,7 @@ par_function <- function(i,j) {
         wk.intra <- dcast(data=wk.neighbours, Tree_ID_IN ~voisins, value.var= "intra")[,-1]
         wk.clusters <- dcast(data=wk.neighbours, Tree_ID_IN ~voisins, value.var= "cluster")[,-1]
         wk.shades <- dcast(data=wk.neighbours, Tree_ID_IN ~voisins, value.var= "shade")[,-1]
-        wk.lhabs <- dcast(data=neighbours, Tree_ID_IN ~voisins, value.var= "lhab")[,-1]
+        wk.phyl <- dcast(data=neighbours, Tree_ID_IN ~voisins, value.var= "Phyl")[,-1]
         wk.targets$sr <- apply(wk.species, 1, function(x)length(unique(x)))
 
 
