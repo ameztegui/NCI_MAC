@@ -12,6 +12,7 @@ library(readr)
 ## Load the database with all the trees and the neighbours
 all_trees <- read_tsv('./Data/tidydata_2009_2014.txt') 
 raw_neighbours <- read_tsv('./Data/raw_neighbours.txt')
+sps_groups <- read_tsv('./Data/species_groups.txt')
 
 ## Load the dataset of functional traits,  and neighbour datasets
 traits <- read.table('./Data/functional_traits.dta')
@@ -179,12 +180,16 @@ std_traits<- data.frame(scale(traits))
     neighbours$shade <- as.factor(neighbours$shade)
     
     
-    # Add classification based on leaf habit
-    lhab_groups <- data.frame ("CodeSp"= levels(as.factor(targets$CodeSp)),
-                               "lhab"= c("C","D","D","D","D","D","C",
-                                         "C","C","C","C","C","C","C",
-                                         "C","D","D","C","D"))
-    neighbours <- left_join(neighbours, lhab_groups, by=c("CodeSp_NEAR"="CodeSp")) #different name
+    # Add classification based on leaf habit, origin, etc
+    neighbours <- left_join(neighbours, sps_groups) #different name
+    
+    # Save classification by species
+    species_groups <- neighbours %>%
+            select(CodeSp_NEAR, cluster, shade, Phyl, Lhab,Origin) %>%
+            unique()
+    write.table(species_groups, "./Data/species_groups.txt", row.names = F, sep="\t")
+    
+            
     
     # Add species identity based on intra vs. interspecific
     neighbours <- mutate(neighbours,intra=ifelse(CodeSp_NEAR==CodeSp_IN,as.character(CodeSp_IN),"zother"))

@@ -15,12 +15,21 @@ namesSp <- data.frame(CodeSp=levels(all_trees$CodeSp),
                                 "Picea abies","Picea glauca","Picea omorika","Pinus resinosa",
                                 "Picea rubens", "Pinus strobus","Pinus sylvestris","Quercus robur",
                                 "Quercus rubra","Thuja occidentalis","Tilia cordata"),
-                      Lhab=c("C","D","D","D","D","D","C","C",
-                             "C","C","C","C","C","C","C","D",
-                             "D","C","D"),
+                      Phyl=c("Gym","Ang","Ang","Ang",
+                             "Ang","Ang","Gym","Gym",
+                             "Gym","Gym","Gym","Gym",
+                             "Gym","Gym","Gym","Ang",
+                             "Ang","Gym","Ang"),
+                      Lhab = c("E","D","D","D",
+                               "D","D","D","D",
+                               "E","E","E","E",
+                               "E","E","E","D",
+                               "D","E","D"),
                       Origin=c("N","E","N","N","N","N","E","N",
                                "E","N","E","N","N","N","E","E",
                                "N","N","E"))
+write.table(namesSp, "./Data/species_groups.txt", row.names = F, sep="\t")
+
 all_trees <- left_join(all_trees,namesSp,by="CodeSp")
 all_trees$Tree_ID <- paste(all_trees$Block, all_trees$Plot, all_trees$Pos, sep="_")
 

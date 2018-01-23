@@ -10,6 +10,8 @@
 rm(list=ls()) 
 library(tidyverse)
 
+sps_groups <- read_tsv( "./Data/species_groups.txt")
+
 
 ### Create a list with all the .txt files in the  directory
 
@@ -62,6 +64,7 @@ modelcomp<-modelcomp[,1:8]
         modelcomp$Species<- substr(modelcomp$File, 26, 29)
         modelcomp$Model<- substr(modelcomp$File, 30, 38)
 
+modelcomp <- left_join(modelcomp, sps_groups, by=c("Species" = "CodeSp_NEAR"))
 write.table(modelcomp, file = "./Results/ModelComparison.txt", sep="\t", row.names = F)
 
 
