@@ -3,10 +3,10 @@ title: "Interpretation of the first results for the MAC - NCI project"
 author: "Aitor Ameztegui - Universitat de Lleida"
 date: "January 2018"
 output:
-  word_document: default
-  pdf_document: default
-  html_document:
-    df_print: paged
+  word_document:
+    fig_width: 8
+    fig_height: 8
+    fig_caption: true
 ---
 
 
@@ -19,8 +19,7 @@ knitr::opts_chunk$set(echo =F)
 
 # Introduction
 
-This document summarises the results of the models ran to test the effect of neighborhood, and functional diversity on the growth of 19 tree species in the MAC experiment. We will specify the hypotheses tested, the models developed to test those hypotheses, and the results of those models. 
-
+This document summarises the results of the models ran to test the effect of neighborhood and functional diversity on the growth of 19 tree species in the MAC experiment. We will specify the hypotheses tested, the models developed to test those hypotheses, and the results of those models.
 ```{r}
 load ("../Data/NCI_MAC.Rdata")
 
@@ -28,104 +27,121 @@ load ("../Data/NCI_MAC.Rdata")
 
 First thing we need is to describe our dataset, which contains 19 species (12 native, 7 exotic), that have been measured between 2009 and 2014. The total number of trees planted was 13,824, but after deleting the missing and dead trees, we kept a total of `r nrow(targets)` as target trees. These are the main descriptive statistics of the target trees per species
 
-```{r}
+```{r, message=F, warning=F}
 
-# library(tables)
-# Mean <- function(x) base::mean(x, na.rm=TRUE)
-# Sd <- function(x) sd(x, na.rm=TRUE)
-# tabular( (CodeSp +1 ) ~ (n=1) + Format(digits=2) *
-#                 (Heading("Diam14")*DB2014 + 
-#                 Heading("Height14") *H2014 +
-#                 Heading("D Growth")*(DB2014-DB2009)+
-#                 Heading("H Growth")*(H2014-H2009)      )*((Mean+Sd) ), data=targets )
+
+library(tidyverse)
+library(knitr)
+
+descriptive <- targets %>%
+        group_by(CodeSp) %>%
+        summarise(n=n(),
+                  Diam14 = round(mean(DB2014, na.rm =T),1),
+                  Diam14_sd = round(sd(DB2014, na.rm =T),1),
+                  Height2014 = round(mean(H2014, na.rm =T),1),
+                  Height2014_sd = round(sd(H2014, na.rm =T),1),
+                  Diam_growth = round(mean (DB2014-DB2009, na.rm = T),1),
+                  Diam_growth_sd = round(sd (DB2014-DB2009, na.rm = T),1),
+                  Height_growth = round(mean (H2014 - H2009, na.rm = T),1),
+                  Height_growth_sd = round(sd (H2014 - H2009, na.rm = T),1))
+
+
+kable (descriptive, format = "markdown")
 
 ```
 
-The mean diameter growth for all the dataset is `r round(mean(targets$DB2014 - targets$DB2009)/5,2)` mm per year in diameter, and `r round(mean(targets$H2014 - targets$H2009)/5,2)` cm per year in height. We can also see that diameter growth is more consistent across species than height growth, for which the fastest growing species (BEPA: 5.82 m) growed almost 10 times faster than the slowest growing one (PIOM = 0.6m)
+The mean diameter growth for all the dataset is `r round(mean(targets$DB2014 - targets$DB2009)/5,2)` mm per year in diameter, and `r round(mean(targets$H2014 - targets$H2009, na.rm=T)/5,2)` cm per year in height. We can also see that diameter growth is more consistent across species than height growth, for which the fastest growing species (BEPA: 5.85 m) growed almost 10 times faster than the slowest growing one (PIOM = 0.64m)
 
+We also need to characterize the neighborhood of each target tree. We could first calculate how many neighbours has a tree of a certain species on average, and compare the results across species
 
-The main factors that determine the growth of a tree are well established, and among them, two of the most important factors are the size of the tree itself, and the neighborhood (number, size and distance from neighbours). Accordingly, growth was modelled as function of several multiplicative components: (1) potential growth, i.e. estimated growth when all the other factors (i.e. predictors) are at optimal values, (2) size effect, i.e. the effect of the size of the target tree on tree growth, and (3) competition effect, which accounts for the number and size of neighbours, and their distance to target tree. 
+```{r}
+ggplot(targets) +
+        geom_boxplot( aes (CodeSp, n_neighbours)) 
+```
 
+We can see there are no big differences, as expected. We can now check how many neighbours of each species has a given target species
 
+```{r}
+neighbour_sps <- table (neighbours$CodeSp_IN, neighbours$CodeSp_NEAR)
+kable(addmargins(neighbour_sps,1), format ="markdown") 
+```
+
+In this case, we see that some species are indeed very rare. Since our most complex model has 30 parameters, and some studies recommend that the ratio observations/parameters should be > 10, I decided to collapse all neighbouring species with less than 300 observations into a "other" group.
+
+The main factors that determine the growth of a tree are well established, and among them, two of the most important factors are the size of the tree itself, and the neighborhood (number, size and distance from neighbours). Accordingly, growth was modelled as function of several multiplicative components: (1) potential growth, i.e. estimated growth when all the other factors (i.e. predictors) are at optimal values, (2) size effect, i.e. the effect of the size of the target tree on tree growth, and (3) competition effect, which accounts for the number and size of neighbours, and their distance to target tree.
 $$
 Growth {=}  Pot.~Growth* size~effect * competition~effect
 $$
 Both size effect and competition effect are scalars that range between 0 and 1, and thus act to reduce the estimated potential growth, which indicates the estimated growth when all the other factors are at optimal values. In other words, when size of the target tree and the number, size and distance of neighbours are at the levels that maximize tree growth (i.e. when their effects equal 1), then observed growth equals the estimated potential growth.
-
-
-Following classical studies that followed this approach (Uriarte et al., 2004; Canham et al.,
-2006; Coates et al., 2009; Gómez-Aparicio et al. 2011), the size effect was modeled using a lognormal function:
-
+Following classical studies that followed this approach (Uriarte et al., 2004; Canham et al., 2006; Coates et al., 2009; Gómez-Aparicio et al. 2011), the size effect was modeled using a lognormal function:
 $$
 Size~effect~{=}~exp[-\frac{1}{2}(\frac{log(size/Xo)}{Xb})^2]
 $$
 
-where Xo represents the target d.b.h. (cm) at which maximum growth occurs and Xb controls the breadth of the function. Depending on the value of Xo, this functional form can be hump-shaped or monotonically increasing/decreasing.
+where Xo represents the target size at which maximum growth occurs and Xb controls the breadth of the function. Depending on the value of Xo, this functional form can be hump-shaped or monotonically increasing/decreasing.
 
 The neighborhood effect was modeled as a function of a neighborhood competition index (NCI) using a Weibull function
-
 $$
 Neighborhood~effect~{=}~exp (-C * diam^\gamma * NCI^D)
 $$
 
-The NCI quantifies the net effect of j=1, . . .,n neighboring trees of i=1, . . ., s species on the growth of a target tree z. Following the long tradition of distance-dependence analysis of competition (e.g. Bella, 1971; Daniels, 1976), NCI was assumed to vary as a direct function of the size (d.b.h.) and an inverse function of the distance to neighbors following the form:
-
+The NCI quantifies the net effect of j=1, . . .,n neighboring trees of i=1, . . ., s species on the growth of a target tree z. Following the long tradition of distance-dependence analysis of competition (e.g. Bella, 1971; Daniels, 1976), NCI was assumed to vary as a direct function of the size and an inverse function of the distance to neighbors following the form:
 $$
 NCI~{=}~\sum_{i=1}^{n}\sum_{j=1}^{s}\frac{size_j^\alpha}{distance_{ij}^\beta}
 $$
 
-where $\alpha$, $\beta$ and $\gamma$ are parameters estimated by the analyses and determine the shape of the effect of the d.b.h. and the distance to the neighbor on NCI.
+where $\alpha$ and $\beta$ are parameters estimated by the analyses and determine the shape of the effect of the size and the distance to the neighbor on NCI.
 
-The combination of equations 1, 2 and 3 constitutes our basic model, and is the starting point from which we test various hypotheses related to the role of neighbourhood diversity in tree growth. To do this, we compare the base model with various alternatives, using the comparison of models as hypothesis tests.
+The combination of equations 1, 2, 3 and 4 constitutes our baseline model, and is the starting point from which we test various hypotheses related to the role of neighbourhood in tree growth. To do this, we compare the baseline model (H0) with various alternative models (H1.n), using model comparison via Akaike's information criterion as hypotheses tests.
 
 # First group of hypotheses: Growth is mediated by the diversity of the neighborhood
 
 Our baseline model considers the effect on tree growth of tree size and the amount, size and distance of neighbours. Beyond these factors, the relationship between diversity and growth is well established at the stand or community level, so that the most diverse ecosystems are generally more productive. However, that relationship is not so clear at the individual level, and it is far from clear how the diversity of neighbours affects a particular tree. To assess this, we modified the baseline model, so that the effect of neighborhood (i.e. NCI) on tree growth is mediated by the diversity of neighbours. Specifically, we tested three alternative hypotheses:
 
-H1: The effects of competition on tree growth are less as the specific diversity of your neighborhood increases. To do this, we modified equation 2 so that NCI's effect on the growth of each target tree was a function of the Shannon index measured in that tree's neighborhood. 
+***H1:*** The effects of competition on tree growth decrease as the specific diversity of its neighborhood increase. To test this, we modified equation 2 so that NCI's effect on the growth of each target tree was a function of the Shannon index measured in that tree's neighborhood.
 
 $$
 Neighborhood~effect~{=}~exp (-C * diam^\gamma * shannon^\theta * NCI^D)
 $$
 
-H2: The effects of competition on tree growth are less as the functional diversity of your neighborhood increases. In this case, NCI's effect on the growth of each target tree was a function of the functional diversity of the neighborhood, measured through the functional dispersion index.
+***H2:*** The effects of competition on tree growth are less as the functional diversity of your neighborhood increases. In this case, NCI's effect on the growth of each target tree was a function of the functional diversity of the neighborhood, measured through the functional dispersion index.
 
 $$
-Neighborhood~effect ~{=} ~exp (-C * diam^\gamma * Fdis^\theta * NCI^D)
+Neighborhood~effect ~{=} ~exp (-C * diam^\gamma * Fdis^\phi * NCI^D)
 $$
 
-H3: The effects of competition on the growth of a tree are smaller the greater the functional difference between your neighborhood and the target tree.  That is, the more functionally different a tree is from its neighborhood. To do this, we calculate the functional difference index as the difference between the functional features of the neighborhood and those of the target tree, as follows.
+***H3:***: The effects of competition on the growth of a tree are smaller the greater the functional difference between the target tree and its neighborhood. That is, the more functionally different a tree is from its neighborhood. To do this, we calculated the functional difference index as the difference between the functional traits (CWM) of the neighborhood and those of the target tree.
 
 $$
-Neighborhood~effect~ {=} ~exp (-C * diam^\gamma * FDif^\theta * NCI^D)
+Neighborhood~effect~ {=} ~exp (-C * diam^\gamma * FDif^\psi * NCI^D)
 $$
 
-According to our results, there was some effect of neighborhood diversity on all the 19 species studied, although the component of diversity with the greatest effect varied between species. Even more interestingly, we found a divergent pattern according to the leaf habit: for 8 out of 9 deciduous species, the effect of competition on tree growth was mediated by the functional diversity of the neighborhood, while for evergreen species, it was the functional difference between the target tree and neighbors that was more important.
+According to our results, there was some effect of neighborhood diversity on all the 19 species studied, although the component of diversity with the greatest effect varied between species. More interestingly, we found a divergent pattern according to the leaf habit: for 8 out of 9 deciduous species, the effect of competition on tree growth was mediated by the functional diversity of the neighborhood (H2), while for evergreen species, it was the functional difference between the target tree and neighbors (H3) that was more important. 
 
 # Second group of hypotheses: Growth is mediated by the net outcome of the species-specific competitive effect
 
-Recently, a good number of studies have shown that the effect of neighbours on growth is not so much dependent on the specific or functional diversity of neighbours, but that there is a marked species-specific competitive effect, so that different species of neighbouring trees can have different competitive effects, or ability to suppress neighbour growth. Consequently, the global effect of neighborhood would be the net outcome of the species-specific competitive interactions. To test that hypothesis (H4), we modified our baseline model to incorporate a per-capita competition coefficient ($\lambda$):
+Recently, a good number of studies have shown that the effect of neighbours on growth is not so much dependent on the specific or functional diversity of neighbours, but that there is a marked species-specific competitive effect, so that different species of neighbouring trees can have different competitive effects, or ability to suppress neighbour growth. Consequently, the global effect of neighborhood would be the net outcome of the species-specific competitive interactions. To test that, we modified our baseline model to incorporate a per-capita competition coefficient  ($\lambda$):
 
 $$
 NCI~{=}~\sum_{i=1}^{n}\sum_{j=1}^{s}\lambda\frac{size_j^\alpha}{distance_{ij}^\beta}
 $$
 
-($\lambda$) ranged from 0 to 1 and allowed for differences between species in their competitive effect on a target tree. Competition coefficients were only estimated for those species of competitors for which there were at least 300 neighbors. All remaining species of neighbors for that target species were then grouped into a 'other species' group. We tested four different groupings of neighboring species in Eqn (5), echa corresponding to an hypothesis: (H5) a model that calculated a different ($\lambda$) value for each neighbor species, (H6) a model that calculated two separate ($\lambda$), one for conspecifics and another for heterospecifics, (H7) a model that calculated four separate ($\lambda$), based on the agrupation of neighbour species into 4 functional groups, and (H8), a model that calculated three separate ($\lambda$) based on the shade tolerance of the neighbours. All these models were compared to the baseline model (H4), in which all species were considered equivalent competitors (i.e. would be equivalent to fixing ($\lambda{=}1$)
+$\lambda$ ranged from 0 to 1 and allowed for differences between species in their competitive effect on a target tree. Competition coefficients were only estimated for those species of competitors for which there were at least 300 neighbors. All remaining species of neighbors for that target species were grouped into an 'other species' group. We tested four different groupings of neighboring species in Eqn (5), each corresponding to an hypothesis: (***H4***) a model that calculated a different $\lambda$ value for each neighbor species, (***H5***) a model that calculated two separate $\lambda$, one for conspecifics and another for heterospecifics, (***H6***) a model that calculated four separate $\lambda$, based on the agrupation of neighbour species into 4 functional groups, and (***H7***), a model that calculated three separate $\lambda$ based on the shade tolerance of the neighbours. All these models were compared to the baseline model (***H0***), in which all species were considered equivalent competitors (i.e. would be equivalent to fixing ($\lambda{=}1$)
 
-Results show that, in all cases, considering the specific identity of neighbours resulted in better fit than the baseline model, and moreover, in better models than those that only considered the diversity of the neighbourhood as a whole. In 16 out of 19 species, the best model was the ome that calculated a different ($\lambda$) value for each neighbor species.
+Results in Table 1 show that, in all cases, considering the specific identity of neighbours resulted in better fits than the baseline model, and moreover, in better models than those that only considered the diversity of the neighbourhood as a whole (H1 to H3). In 16 out of 19 species, the best model was the one that calculated a different $\lambda$ value for each neighbor species.
 
 # Third group of hypotheses: interaction between target tree and neighbours can also be facilitative, not necessarily competitive.
 
 We tested this through two different hypotheses:
 
-H9: the relationship between neighborhood (NCI) and the growth of a target tree is not necessarily negative. That is, for some target species, there can be an optimum amount of competition at which growth is maximum, to decrease at lower or higher values of competition. To test that, we modified equation #, so that the neighborhood effect was modeled as a function of a neighborhood competition index (NCI) using a bivariate Gaussian function
+***H8:*** the relationship between neighborhood (NCI) and the growth of a target tree is not necessarily negative. That is, for some target species, there can be an optimum amount of competition at which growth is maximum, to decrease at lower or higher values of competition. To test that, we modified equation 3, so that the neighborhood effect was modeled as a function of a neighborhood competition index (NCI) using a bivariate Gaussian function
 
 $$
 Competition~effect~{=}~exp[-\frac{1}{2}(\frac{NCI-Zo)}{Zb})^2]
 $$
 where $Z_0$ is the NCI value at which maximum potential growth occurs; and $Z_b$ is an estimated parameter that controls the breadth of the function (i.e. the variance of the normal distribution). EThis equation produces the classic Gaussian distribution of species performance along an  axis usually, but can also produce sigmoidal, monotonic curves within restricted ranges of either axis. 
 
-H10: the global facilitative or competitive effect of neighborhood is the net outcome of species-specific relationships, so for a given target species, some species can act as competitors and others as facilitators. In order to test that, we modified NCI equation to allow $\lambda$ to take negative or positive values: i.e. to vary between -1 and 1. Negative $\lambda$ values indicate a facilitative effect, i.e. that growth of the target species is favored by the presence of the neighbour species. On the other hand, positive $\lambda$ values indicate competitive effects.
+***H9:*** the global facilitative or competitive effect of neighborhood is the net outcome of species-specific relationships, so for a given target species, some species can act as competitors and others as facilitators. In order to test that, we modified NCI equation to allow $\lambda$ to take negative or positive values: i.e. to vary between -1 and 1. Negative $\lambda$ values indicate a facilitative effect, i.e. that growth of the target species is favored by the presence of the neighbour species. On the other hand, positive $\lambda$ values indicate competitive effects.
 
 
-For 11 out of 19 species, including negative lambdas (i.e. the possibility of facilitative effects of certain neighbour species).
+For 11 out of 19 species, including negative lambdas (i.e. the possibility of facilitative effects of certain neighbour species) produced the best fitting model. The Gaussian NCI hypothesis was only supported for one species (PIRE), and even though, that model was not much better than alternative models.
